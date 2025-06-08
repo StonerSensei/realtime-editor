@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CollabIDE - Collaborative Code Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+
+    <style>
+        :root {
+            --primary: #44475a;
+            --secondary: #343746;
+            --tertiary: #282a36;
+            --accent: #bd93f9;
+            --text: #f8f8f2;
+            --error: #ff5555;
+            --success: #50fa7b;
+            --warning: #ffb86c;
+            --info: #8be9fd;
+            --purple: #bd93f9;
+            --pink: #ff79c6;
+            --cyan: #8be9fd;
+            --green: #50fa7b;
+            --orange: #ffb86c;
+            --red: #ff5555;
+            --yellow: #f1fa8c;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+        }
+
+        body {
+            background-color: var(--tertiary);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            padding: 1rem 1.5rem;
+            border-bottom: 3px solid var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 100;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg,
+            rgba(189, 147, 249, 0.1) 0%,
+            rgba(139, 233, 253, 0.1) 50%,
+            rgba(80, 250, 123, 0.1) 100%);
+            pointer-events: none;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+            position: relative;
+            z-index: 1;
+        }
+
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .room-badge {
+            background: rgba(189, 147, 249, 0.2);
+            border: 1px solid var(--accent);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 60px;
+            background: var(--primary);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 0;
+            gap: 1rem;
+        }
+
+        .sidebar-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .sidebar-btn:hover {
+            background: rgba(189, 147, 249, 0.2);
+            color: var(--accent);
+            transform: scale(1.1);
+        }
+
+        .sidebar-btn.active {
+            background: var(--accent);
+            color: var(--tertiary);
+        }
+
+        /* Editor Area */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--secondary);
+        }
+
+        .editor-header {
+            background: var(--primary);
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .file-tabs {
+            display: flex;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .file-tab {
+            background: var(--secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px 8px 0 0;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .file-tab.active {
+            background: var(--tertiary);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .file-tab:hover {
+            background: rgba(139, 233, 253, 0.1);
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.run {
+            background: var(--success);
+            color: var(--tertiary);
+            border-color: var(--success);
+        }
+
+        .action-btn.run:hover {
+            background: #45d669;
+            box-shadow: 0 4px 12px rgba(80, 250, 123, 0.3);
+        }
+
+        .action-btn.download {
+            background: var(--info);
+            color: var(--tertiary);
+            border-color: var(--info);
+        }
+
+        .action-btn.download:hover {
+            background: #7dd3fc;
+            box-shadow: 0 4px 12px rgba(139, 233, 253, 0.3);
+        }
+
+        .action-btn.exit {
+            background: var(--error);
+            color: var(--text);
+            border-color: var(--error);
+        }
+
+        .action-btn.exit:hover {
+            background: #dc2626;
+            box-shadow: 0 4px 12px rgba(255, 85, 85, 0.3);
+        }
+
+        /* CodeMirror Styling */
+        .CodeMirror {
+            height: 100% !important;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace !important;
+            font-size: 14px !important;
+            background: var(--tertiary) !important;
+        }
+
+        .CodeMirror-gutters {
+            background: var(--primary) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .CodeMirror-linenumber {
+            color: rgba(248, 248, 242, 0.5) !important;
+        }
+
+        .CodeMirror-cursor {
+            border-left: 2px solid var(--accent) !important;
+        }
+
+        /* Bottom Panel */
+        .bottom-panel {
+            height: 300px;
+            min-height: 150px;
+            max-height: 60vh;
+            background: var(--primary);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            resize: vertical;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .resize-handle {
+            position: absolute;
+            top: -3px;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: transparent;
+            cursor: row-resize;
+            z-index: 10;
+        }
+
+        .resize-handle:hover {
+            background: rgba(189, 147, 249, 0.3);
+        }
+
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 1px;
+        }
+
+        .panel-tabs {
+            display: flex;
+            gap: 1px;
+            background: var(--secondary);
+            padding: 0.5rem 1rem;
+        }
+
+        .panel-tab {
+            background: var(--primary);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px 6px 0 0;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .panel-tab.active {
+            background: var(--tertiary);
+            color: var(--accent);
+        }
+
+        .panel-content {
+            flex: 1;
+            background: var(--tertiary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-section {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .input-section h4 {
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-area {
+            width: 100%;
+            min-height: 80px;
+            background: var(--secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 0.75rem;
+            color: var(--text);
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+
+        .input-area:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+        }
+
+        .output-section {
+            flex: 1;
+            padding: 1rem;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .output-header h4 {
+            color: var(--success);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .clear-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .output-display {
+            flex: 1;
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--green);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--primary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            min-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content h3 {
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-btn.primary {
+            background: var(--accent);
+            color: var(--tertiary);
+        }
+
+        .modal-btn.primary:hover {
+            background: #a78bfa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(189, 147, 249, 0.3);
+        }
+
+        .modal-btn.secondary {
+            background: var(--secondary);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: var(--tertiary);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: var(--error);
+            color: var(--text);
+        }
+
+        .toast.warning {
+            background: var(--warning);
+            color: var(--tertiary);
+        }
+
+        .toast.info {
+            background: var(--info);
+            color: var(--tertiary);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header {
+                padding: 0.75rem 1rem;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .room-info {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .editor-actions {
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+
+            .action-btn {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.8rem;
+            }
+
+            .sidebar {
+                width: 50px;
+            }
+
+            .sidebar-btn {
+                width: 35px;
+                height: 35px;
+                font-size: 1rem;
+            }
+
+            .bottom-panel {
+                height: 250px;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                min-width: unset;
+                width: calc(100% - 2rem);
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a78bfa;
+        }
+
+        /* Hide elements initially */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+<!-- Header -->
+<div class="header">
+    <div class="logo">
+        <i class="fas fa-code"></i>
+        CollabIDE
+    </div>
+    <div class="room-info">
+        <div class="room-badge">
+            <i class="fas fa-door-open"></i>
+            Room: <span id="roomDisplay">Loading...</span>
+        </div>
+        <div class="room-badge">
+            <div class="status-indicator"></div>
+            <span id="connectionStatus">Connected</span>
+        </div>
+    </div>
+</div>
+
+<!-- Main Container -->
+<div class="main-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <button class="sidebar-btn active" title="Code Editor" data-panel="editor">
+            <i class="fas fa-code"></i>
+        </button>
+        <button class="sidebar-btn" title="File Explorer" data-panel="files">
+            <i class="fas fa-folder"></i>
+        </button>
+        <button class="sidebar-btn" title="Settings" data-panel="settings">
+            <i class="fas fa-cog"></i>
+        </button>
+    </div>
+
+    <!-- Editor Area -->
+    <div class="editor-area">
+        <!-- Editor Header -->
+        <div class="editor-header">
+            <div class="file-tabs">
+                <div class="file-tab active">
+                    <i class="fas fa-file-code"></i>
+                    <span id="filename">main.js</span>
+                </div>
+            </div>
+            <div class="editor-actions">
+                <button class="action-btn run" id="runBtn">
+                    <i class="fas fa-play"></i>
+                    Run
+                </button>
+                <button class="action-btn download" id="downloadBtn">
+                    <i class="fas fa-download"></i>
+                    Download
+                </button>
+                <button class="action-btn exit" id="exitBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Exit
+                </button>
+            </div>
+        </div>
+
+        <!-- Code Editor -->
+        <textarea id="code" style="display: none;"></textarea>
+    </div>
+</div>
+
+<!-- Bottom Panel -->
+<div class="bottom-panel" id="bottomPanel">
+    <div class="resize-handle" id="resizeHandle"></div>
+    <div class="panel-tabs">
+        <button class="panel-tab active" data-tab="terminal">
+            <i class="fas fa-terminal"></i>
+            Terminal
+        </button>
+        <button class="panel-tab" data-tab="input">
+            <i class="fas fa-keyboard"></i>
+            Input
+        </button>
+    </div>
+    <div class="panel-content">
+        <div class="input-section">
+            <h4>
+                <i class="fas fa-keyboard"></i>
+                Custom Input (stdin):
+            </h4>
+            <textarea id="userInput" class="input-area" placeholder="Enter your program's input here..."></textarea>
+        </div>
+        <div class="output-section">
+            <div class="output-header">
+                <h4>
+                    <i class="fas fa-terminal"></i>
+                    Output
+                </h4>
+                <button class="clear-btn" id="clearOutput">
+                    <i class="fas fa-trash"></i>
+                    Clear
+                </button>
+            </div>
+            <div id="output" class="output-display">Ready to execute code...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Download Modal -->
+<div id="filenameModal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <h3>
+            <i class="fas fa-save"></i>
+            Save File
+        </h3>
+        <input type="text" id="filenameInput" class="modal-input" placeholder="Enter filename (without extension)" />
+        <div class="modal-actions">
+            <button class="modal-btn primary" id="confirmDownload">
+                <i class="fas fa-download"></i>
+                Download
+            </button>
+            <button class="modal-btn secondary" id="cancelDownload">
+                <i class="fas fa-times"></i>
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast" class="toast"></div>
+
+<!-- CodeMirror Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+
+<script>
+    // URL Parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get("room") || "default";
+    const language = urlParams.get("lang") || "javascript";
+
+    // Update UI with room info
+    document.getElementById("roomDisplay").textContent = roomId;
+    document.getElementById("filename").textContent = `main.${getFileExtension(language)}`;
+
+    // WebSocket Connection
+    const ws = new WebSocket(`ws://localhost:8080/ws/${roomId}`);
+    let isRemoteChange = false;
+
+    // Initialize CodeMirror
+    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+        lineNumbers: true,
+        mode: getCodeMirrorMode(language),
+        theme: "dracula",
+        lineWrapping: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        indentUnit: 4,
+        tabSize: 4,
+        extraKeys: {
+            "Ctrl-Space": "autocomplete",
+            "F11": function(cm) {
+                cm.setOption("fullScreen", !cm.getOption("fullScreen"));
+            },
+            "Esc": function(cm) {
+                if (cm.getOption("fullScreen")) cm.setOption("fullScreen", false);
+            }
+        }
+    });
+
+    // Utility Functions
+    function getCodeMirrorMode(lang) {
+        const modes = {
+            javascript: "javascript",
+            cpp: "text/x-c++src",
+            c: "text/x-csrc",
+            python: "python",
+            java: "text/x-java"
+        };
+        return modes[lang] || "javascript";
+    }
+
+    function getFileExtension(lang) {
+        const extensions = {
+            javascript: "js",
+            cpp: "cpp",
+            c: "c",
+            python: "py",
+            java: "java"
+        };
+        return extensions[lang] || "js";
+    }
+
+    function showToast(message, type = "success") {
+        const toast = document.getElementById("toast");
+        const icons = {
+            success: "fas fa-check-circle",
+            error: "fas fa-exclamation-circle",
+            warning: "fas fa-exclamation-triangle",
+            info: "fas fa-info-circle"
+        };
+
+        toast.innerHTML = `
+                <i class="${icons[type] || icons.success}"></i>
+                ${message}
+            `;
+        toast.className = `toast ${type}`;
+        toast.classList.add("show");
+
+        setTimeout(() => {
+            toast.classList.remove("show");
+        }, 3000);
+    }
+
+    // WebSocket Event Handlers
+    ws.onopen = () => {
+        console.log("✅ Connected to room:", roomId);
+        document.getElementById("connectionStatus").textContent = "Connected";
+        showToast("Connected to collaborative session", "success");
+    };
+
+    ws.onerror = (err) => {
+        console.error("❌ WebSocket error:", err);
+        document.getElementById("connectionStatus").textContent = "Connection Error";
+        showToast("Connection error occurred", "error");
+    };
+
+    ws.onclose = () => {
+        console.log("🔌 Disconnected from room");
+        document.getElementById("connectionStatus").textContent = "Disconnected";
+        showToast("Disconnected from session", "warning");
+    };
+
+    ws.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.type === "code") {
+                const cursor = editor.getCursor();
+                isRemoteChange = true;
+                editor.setValue(data.content);
+                editor.setCursor(cursor);
+                isRemoteChange = false;
+            }
+        } catch (err) {
+            console.error("❌ JSON parse error:", err);
+        }
+    };
+
+    // Editor Change Handler
+    editor.on("change", () => {
+        if (isRemoteChange) return;
+        const content = editor.getValue();
+        const message = JSON.stringify({ type: "code", content });
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(message);
+        }
+    });
+
+    // Button Event Listeners
+    document.getElementById("exitBtn").addEventListener("click", () => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.close();
+        }
+        showToast("Leaving room...", "info");
+        setTimeout(() => {
+            window.location.href = "/index.html";
+        }, 1000);
+    });
+
+    // Download Modal Logic
+    const modal = document.getElementById("filenameModal");
+    const filenameInput = document.getElementById("filenameInput");
+
+    function openModal() {
+        filenameInput.value = "";
+        modal.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+        filenameInput.focus();
+    }
+
+    function closeModal() {
+        modal.classList.add("hidden");
+        document.body.style.overflow = "auto";
+    }
+
+    document.getElementById("downloadBtn").addEventListener("click", openModal);
+
+    document.getElementById("confirmDownload").addEventListener("click", () => {
+        let filename = filenameInput.value.trim();
+        if (!filename) {
+            showToast("Please enter a filename", "error");
+            return;
+        }
+
+        const ext = getFileExtension(language);
+        filename = filename.replace(/\s+/g, "_") + "." + ext;
+
+        const blob = new Blob([editor.getValue()], { type: "text/plain" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+
+        showToast(`File downloaded: ${filename}`, "success");
+        closeModal();
+    });
+
+    document.getElementById("cancelDownload").addEventListener("click", closeModal);
+
+    // Modal close on Escape key
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+            closeModal();
+        }
+    });
+
+    // Code Execution
+    document.getElementById("runBtn").addEventListener("click", () => {
+        const code = editor.getValue();
+        const input = document.getElementById("userInput").value;
+        const output = document.getElementById("output");
+
+        if (!code.trim()) {
+            showToast("No code to execute", "warning");
+            return;
+        }
+
+        output.textContent = "🚀 Executing code...\n";
+        showToast("Executing code...", "info");
+
+        const execSocket = new WebSocket("ws://localhost:8080/ws/exec");
+
+        execSocket.onopen = () => {
+            execSocket.send(JSON.stringify({ language, code, input }));
+        };
+
+        execSocket.onmessage = (e) => {
+            output.textContent += e.data + "\n";
+            output.scrollTop = output.scrollHeight;
+        };
+
+        execSocket.onerror = () => {
+            output.textContent += "❌ WebSocket error during execution\n";
+            showToast("Execution error occurred", "error");
+        };
+
+        execSocket.onclose = () => {
+            output.textContent += "\n✅ Execution finished.\n";
+            showToast("Code execution completed", "success");
+        };
+    });
+
+    // Clear Output
+    document.getElementById("clearOutput").addEventListener("click", () => {
+        document.getElementById("output").textContent = "Ready to execute code...";
+        showToast("Output cleared", "info");
+    });
+
+    // Panel Tab Switching
+    document.querySelectorAll(".panel-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".panel-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+
+            const tabType = tab.dataset.tab;
+            if (tabType === "input") {
+                document.getElementById("userInput").focus();
+            }
+        });
+    });
+
+    // Sidebar Navigation
+    document.querySelectorAll(".sidebar-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".sidebar-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+
+            const panel = btn.dataset.panel;
+            showToast(`Switched to ${panel} panel`, "info");
+        });
+    });
+
+    // Auto-save Snapshots
+    let lastSavedCode = "";
+    setInterval(() => {
+        const currentCode = editor.getValue();
+        if (currentCode !== lastSavedCode && currentCode.trim()) {
+            fetch(`/api/snapshots/save?roomId=${roomId}`, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: currentCode
+            }).then(res => {
+                if (res.ok) {
+                    console.log("📝 Snapshot saved automatically");
+                }
+            }).catch(err => {
+                console.error("Failed to save snapshot:", err);
+            });
+            lastSavedCode = currentCode;
+        }
+    }, 10000);
+    document.addEventListener("keydown", (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case "s":
+                    e.preventDefault();
+                    openModal();
+                    break;
+                case "Enter":
+                    if (e.shiftKey) {
+                        e.preventDefault();
+                        document.getElementById("runBtn").click();
+                    }
+                    break;
+                case "q":
+                    if (e.shiftKey) {
+                        e.preventDefault();
+                        document.getElementById("exitBtn").click();
+                    }
+                    break;
+            }
+        }
+    });
+    document.addEventListener("DOMContentLoaded", () => {
+        // Focus editor
+        editor.focus();
+        const starterCode = {
+            javascript: `// Welcome to CollabIDE!\n// Start coding collaboratively\n\nconsole.log("Hello, World!");`,
+            python: `# Welcome to CollabIDE!\n# Start coding collaboratively\n\nprint("Hello, World!")`,
+            cpp: `// Welcome to CollabIDE!\n// Start coding collaboratively\n\n#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
+            c: `// Welcome to CollabIDE!\n// Start coding collaboratively\n\n#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}`,
+            java: `// Welcome to CollabIDE!\n// Start coding collaboratively\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}`
+        };
+
+        if (starterCode[language] && !editor.getValue()) {
+            editor.setValue(starterCode[language]);
+        }
+
+        showToast(`Ready to code in ${language.toUpperCase()}!`, "success");
+    });
+
+    function handleResize() {
+        if (window.innerWidth <= 768) {
+            // Mobile adjustments
+            const currentHeight = parseInt(bottomPanel.style.height) || 300;
+            if (currentHeight > 250) {
+                bottomPanel.style.height = "200px";
+            }
+        }
+        editor.refresh();
+    }
+    window.addEventListener("resize", handleResize);
+    handleResize();
+
+    window.addEventListener("beforeunload", (e) => {
+        if (editor.getValue().trim()) {
+            e.preventDefault();
+            e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+            return e.returnValue;
+        }
+    });
+    setInterval(() => {
+        if (ws.readyState === WebSocket.CLOSED) {
+            document.getElementById("connectionStatus").textContent = "Disconnected";
+            document.querySelector(".status-indicator").style.background = "var(--error)";
+        } else if (ws.readyState === WebSocket.OPEN) {
+            document.getElementById("connectionStatus").textContent = "Connected";
+            document.querySelector(".status-indicator").style.background = "var(--success)";
+        } else {
+            document.getElementById("connectionStatus").textContent = "Connecting...";
+            document.querySelector(".status-indicator").style.background = "var(--warning)";
+        }
+    }, 5000);
+    let isDarkTheme = true;
+    function toggleTheme() {
+        isDarkTheme = !isDarkTheme;
+        if (isDarkTheme) {
+            editor.setOption("theme", "dracula");
+        } else {
+            editor.setOption("theme", "default");
+        }
+    }
+    console.log("🎉 CollabIDE Editor initialized successfully!");
+    console.log("📝 Keyboard shortcuts:");
+    console.log("  - Ctrl/Cmd + S: Save file");
+    console.log("  - Ctrl/Cmd + Shift + Enter: Run code");
+    console.log("  - Ctrl/Cmd + Shift + Q: Exit room");
+    console.log("  - F11: Toggle fullscreen");
+    console.log("  - Esc: Exit fullscreen");
+
+    // Resizable bottom panel
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    const bottomPanel = document.getElementById('bottomPanel');
+    const resizeHandle = document.getElementById('resizeHandle');
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = parseInt(document.defaultView.getComputedStyle(bottomPanel).height, 10);
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        const newHeight = startHeight - (e.clientY - startY);
+        const minHeight = 150;
+        const maxHeight = window.innerHeight * 0.6;
+
+        if (newHeight >= minHeight && newHeight <= maxHeight) {
+            bottomPanel.style.height = newHeight + 'px';
+            editor.refresh();
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        }
+    });
+</script>
+
+</body>
+</html>

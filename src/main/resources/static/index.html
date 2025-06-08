@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CollabIDE - Join or Create Room</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #44475a;
+            --secondary: #343746;
+            --accent: #bd93f9;
+            --text: #f8f8f2;
+            --error: #ff5555;
+            --success: #50fa7b;
+            --warning: #ffb86c;
+            --info: #8be9fd;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+
+        body {
+            background-color: var(--secondary);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image:
+                    radial-gradient(circle at 25% 25%, rgba(139, 233, 253, 0.1) 0%, transparent 50%),
+                    radial-gradient(circle at 75% 75%, rgba(189, 147, 249, 0.1) 0%, transparent 50%);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 2rem;
+            background-color: var(--primary);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--info));
+        }
+
+        h1 {
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            font-size: 2.2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h1 i {
+            font-size: 1.8rem;
+        }
+
+        .description {
+            color: rgba(248, 248, 242, 0.7);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: var(--secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #joinBtn {
+            background-color: var(--info);
+            color: #282a36;
+        }
+
+        #hostBtn {
+            background-color: var(--success);
+            color: #282a36;
+        }
+
+        .language-selector {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .language-selector select {
+            appearance: none;
+            padding-right: 40px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23bd93f9' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 12px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--success);
+            color: #282a36;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            background-color: var(--error);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1.5rem;
+                margin: 1rem;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1><i class="fas fa-code"></i> CollabIDE</h1>
+    <p class="description">Real-time collaborative code editing with live execution. Join an existing room or create your own.</p>
+
+    <div class="input-group">
+        <label for="roomId"><i class="fas fa-door-open"></i> Room ID</label>
+        <input id="roomId" type="text" placeholder="Enter room ID or leave blank to generate" />
+    </div>
+
+    <div class="language-selector">
+        <label for="language"><i class="fas fa-code"></i> Programming Language</label>
+        <select id="language">
+            <option value="javascript">JavaScript</option>
+            <option value="cpp">C++</option>
+            <option value="c">C</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+        </select>
+    </div>
+
+    <div class="btn-group">
+        <button id="joinBtn" onclick="joinRoom()">
+            <i class="fas fa-sign-in-alt"></i> Join Room
+        </button>
+        <button id="hostBtn" onclick="hostRoom()">
+            <i class="fas fa-plus"></i> Create Room
+        </button>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+    function showToast(message, type = "success") {
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.className = "toast";
+        toast.classList.add(type === "error" ? "error" : "success");
+        toast.classList.add("show");
+
+        setTimeout(() => {
+            toast.classList.remove("show");
+        }, 3000);
+    }
+
+    function generateRandomId() {
+        const adjectives = ["quick", "lazy", "happy", "sleepy", "noisy", "hungry"];
+        const nouns = ["fox", "dog", "cat", "panda", "koala", "tiger"];
+        const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+        return `${randomAdj}-${randomNoun}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    function joinRoom() {
+        const id = document.getElementById("roomId").value.trim() || generateRandomId();
+        const language = document.getElementById("language").value;
+
+        fetch(`/api/rooms/join?roomId=${id}`)
+            .then(res => {
+                if (!res.ok) throw new Error("Room not found or couldn't be joined.");
+                window.location.href = `/editor.html?room=${id}&lang=${language}`;
+            })
+            .catch(err => {
+                showToast(err.message, "error");
+                console.error(err);
+            });
+    }
+
+    function hostRoom() {
+        const id = document.getElementById("roomId").value.trim() || generateRandomId();
+        const language = document.getElementById("language").value;
+
+        fetch(`/api/rooms/host?roomId=${id}`, { method: "POST" })
+            .then(res => {
+                if (!res.ok) throw new Error("Room already exists or couldn't be created.");
+                window.location.href = `/editor.html?room=${id}&lang=${language}`;
+            })
+            .catch(err => {
+                showToast(err.message, "error");
+                console.error(err);
+            });
+    }
+
+    // Allow submitting with Enter key
+    document.getElementById("roomId").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            joinRoom();
+        }
+    });
+
+    // Focus the room ID input on load
+    window.addEventListener("load", () => {
+        document.getElementById("roomId").focus();
+    });
+</script>
+</body>
+</html>
