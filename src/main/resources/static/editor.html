@@ -795,12 +795,19 @@
     const roomId = urlParams.get("room") || "default";
     const language = urlParams.get("lang") || "javascript";
 
+    function getWebSocketUrl(endpoint) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        return `${protocol}//${host}${endpoint}`;
+    }
+
     // Update UI with room info
     document.getElementById("roomDisplay").textContent = roomId;
     document.getElementById("filename").textContent = `main.${getFileExtension(language)}`;
 
     // WebSocket Connection
-    const ws = new WebSocket(`ws://localhost:8080/ws/${roomId}`);
+  //  const ws = new WebSocket(`ws://localhost:8080/ws/${roomId}`);
+    const ws = new WebSocket(getWebSocketUrl(`/ws/${roomId}`));
     let isRemoteChange = false;
 
     // Initialize CodeMirror
@@ -984,8 +991,8 @@
         output.textContent = "🚀 Executing code...\n";
         showToast("Executing code...", "info");
 
-        const execSocket = new WebSocket("ws://localhost:8080/ws/exec");
-
+        //const execSocket = new WebSocket("ws://localhost:8080/ws/exec");
+        const execSocket = new WebSocket(getWebSocketUrl("/ws/exec"));
         execSocket.onopen = () => {
             execSocket.send(JSON.stringify({ language, code, input }));
         };
