@@ -7,12 +7,11 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
-import java.util.Map;
 
-@Document("snapshots")
+@Document("chat_messages")
 @Data
 @NoArgsConstructor
-public class CodeSnapshot {
+public class ChatMessage {
 
     @Id
     private String id;
@@ -20,21 +19,16 @@ public class CodeSnapshot {
     @Indexed
     private String roomId;
 
-    private String code;
+    private String username;
 
-    private Map<String, String> files;
-
-    private String language;
-
-    private String savedBy;
+    private String content;
 
     private Instant timestamp;
 
-    public CodeSnapshot(String roomId, String code, String language, String savedBy) {
+    public ChatMessage(String roomId, String username, String content) {
         this.roomId = roomId;
-        this.code = code;
-        this.language = language;
-        this.savedBy = savedBy;
+        this.username = username;
+        this.content = content;
         this.timestamp = Instant.now();
     }
 }

@@ -1,0 +1,18 @@
+# Build output
+target/
+
+# VCS & CI
+.git/
+.github/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+
+# Docs & local files
+*.md
+.env
+
+# OS junk
+.DS_Store
