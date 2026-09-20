@@ -1,7 +1,7 @@
 package com.collabeditor.realtime_editor.config;
 
+import com.collabeditor.realtime_editor.service.RateLimiterService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -16,20 +16,13 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.http.HttpStatus;
 
-import java.time.Duration;
-
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @Value("${auth.rate-limit.capacity:10}")
-    private int rateLimitCapacity;
-
-    @Value("${auth.rate-limit.refill-minutes:1}")
-    private long rateLimitRefillMinutes;
+    private final RateLimiterService rateLimiterService;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -38,8 +31,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        RateLimitFilter rateLimitFilter =
-                new RateLimitFilter(rateLimitCapacity, Duration.ofMinutes(rateLimitRefillMinutes));
+        // Limits are owned by RateLimiterService (Redis-backed, in-memory fallback).
+        RateLimitFilter rateLimitFilter = new RateLimitFilter(rateLimiterService);
 
         http
                 .sessionManagement(session -> session

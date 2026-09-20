@@ -15,6 +15,20 @@ services:
     # ports:
     #   - "27017:27017"
 
+  redis:
+    image: redis:7-alpine
+    container_name: collabide-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Not exposed to the host by default; only the app needs it. Uncomment to inspect.
+    # ports:
+    #   - "6379:6379"
+
   app:
     build: .
     image: collabide:latest
@@ -23,11 +37,15 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       # Point at the mongo service on the compose network
       MONGODB_URI: mongodb://mongo:27017/editor
+      # Point at the redis service on the compose network
+      REDIS_HOST: redis
       # Override in .env for anything non-local (must be >= 32 chars)
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-min-32-characters-long}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-1800000}

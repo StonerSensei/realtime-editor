@@ -36,6 +36,12 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- Redis (Spring Data Redis): shared state across instances + Redis health indicator -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
 		<!-- Prometheus metrics endpoint for Actuator -->
 		<dependency>
 			<groupId>io.micrometer</groupId>

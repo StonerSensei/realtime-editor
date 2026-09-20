@@ -1,8 +1,6 @@
 package com.collabeditor.realtime_editor.config;
 
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
+import com.collabeditor.realtime_editor.service.RateLimiterService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,29 +11,22 @@ import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Token-bucket rate limiter for the authentication endpoints ({@code /api/auth/**}).
+ * Rate limits the authentication endpoints ({@code /api/auth/**}) per client IP.
  * <p>
- * Each client IP gets its own bucket allowing {@code capacity} requests per
- * {@code refillPeriod}. When the bucket is empty the filter short-circuits with
- * HTTP 429. This throttles brute-force login/registration attempts. Buckets are
- * held in memory (fine for a single instance; a distributed setup would back this
- * with Redis via bucket4j-redis).
+ * The accounting itself lives in {@link RateLimiterService}, which is Redis-backed so the
+ * budget is shared across instances and falls back to in-memory counting if Redis is down.
+ * When the limit is exceeded this filter short-circuits with HTTP 429, throttling
+ * brute-force login and registration attempts.
  */
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
-    private final int capacity;
-    private final Duration refillPeriod;
+    private final RateLimiterService rateLimiterService;
 
-    public RateLimitFilter(int capacity, Duration refillPeriod) {
-        this.capacity = capacity;
-        this.refillPeriod = refillPeriod;
+    public RateLimitFilter(RateLimiterService rateLimiterService) {
+        this.rateLimiterService = rateLimiterService;
     }
 
     @Override
@@ -43,12 +34,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        Bucket bucket = buckets.computeIfAbsent(clientIp(request), k -> newBucket());
+        String clientIp = clientIp(request);
 
-        if (bucket.tryConsume(1)) {
+        if (rateLimiterService.allow(clientIp)) {
             filterChain.doFilter(request, response);
         } else {
-            log.warn("Rate limit exceeded for {} on {}", clientIp(request), request.getRequestURI());
+            log.warn("Rate limit exceeded for {} on {}", clientIp, request.getRequestURI());
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(
@@ -61,11 +52,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !request.getRequestURI().startsWith("/api/auth/");
-    }
-
-    private Bucket newBucket() {
-        Bandwidth limit = Bandwidth.classic(capacity, Refill.greedy(capacity, refillPeriod));
-        return Bucket.builder().addLimit(limit).build();
     }
 
     private String clientIp(HttpServletRequest request) {
