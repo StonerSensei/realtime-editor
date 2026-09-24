@@ -90,9 +90,10 @@ const Auth = {
         if (refreshToken) {
             // Best-effort revoke on the server.
             try {
+                // Send the access token too so the server blacklists it immediately.
                 await fetch("/api/auth/logout", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: this.headers(),
                     body: JSON.stringify({ refreshToken })
                 });
             } catch (e) { /* ignore */ }

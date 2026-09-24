@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirements  // this is public endpoints and no auth required here
 public class AuthController {
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final AuthService authService;
 
     @Operation(summary = "Register a new user and receive a JWT")
@@ -48,10 +50,23 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Revoke a refresh token (logout)")
+    @Operation(summary = "Logout: revoke the refresh token and invalidate the current access token",
+            description = "Send the access token as 'Authorization: Bearer <jwt>' to have it "
+                    + "rejected immediately; without it only the refresh token is revoked.")
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
-        authService.logout(request.getRefreshToken());
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request,
+                                       @RequestHeader(value = "Authorization", required = false)
+                                       String authorization) {
+        authService.logout(request.getRefreshToken(), extractBearerToken(authorization));
         return ResponseEntity.noContent().build();
+    }
+
+    /** Returns the raw JWT from an "Authorization: Bearer ..." header, or {@code null}. */
+    private static String extractBearerToken(String authorization) {
+        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        return token.isEmpty() ? null : token;
     }
 }

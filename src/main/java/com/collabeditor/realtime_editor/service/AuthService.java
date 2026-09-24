@@ -19,6 +19,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final TokenBlacklistService tokenBlacklistService;
     private final PasswordEncoder passwordEncoder;
 
     public AuthResponse register(RegisterRequest request) {
@@ -71,8 +72,25 @@ public class AuthService {
                 .build();
     }
 
-    public void logout(String refreshToken) {
+    /**
+     * Revokes the refresh token and, when supplied, force-invalidates the current access
+     * token by blacklisting its jti for the rest of its lifetime.
+     *
+     * @param refreshToken the refresh token to revoke
+     * @param accessToken  the caller's current access token (raw JWT, no "Bearer " prefix);
+     *                     may be {@code null} for clients that don't send it
+     */
+    public void logout(String refreshToken, String accessToken) {
         refreshTokenService.revoke(refreshToken);
+
+        if (accessToken == null || accessToken.isBlank() || !jwtService.isTokenValid(accessToken)) {
+            return; // absent, malformed, or already expired: nothing left to revoke
+        }
+
+        String jti = jwtService.extractJti(accessToken);
+        long ttlMs = jwtService.getRemainingValidityMs(accessToken);
+        tokenBlacklistService.blacklist(jti, ttlMs);
+        log.info("Access token revoked on logout for {}", jwtService.extractUsername(accessToken));
     }
 
     private AuthResponse buildAuthResponse(String username, String email, String message) {

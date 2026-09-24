@@ -35,6 +35,9 @@ class AuthServiceTest {
     private RefreshTokenService refreshTokenService;
 
     @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -145,5 +148,41 @@ class AuthServiceTest {
 
         assertEquals("Invalid username or password", exception.getMessage());
         verify(jwtService, never()).generateToken(anyString());
+    }
+
+    // ── Logout ────────────────────────────────────
+
+    @Test
+    @DisplayName("Logout revokes the refresh token and blacklists the access token's jti for its remaining TTL")
+    void logout_shouldBlacklistAccessTokenJti() {
+        when(jwtService.isTokenValid("access-jwt")).thenReturn(true);
+        when(jwtService.extractJti("access-jwt")).thenReturn("jti-123");
+        when(jwtService.getRemainingValidityMs("access-jwt")).thenReturn(900_000L);
+        when(jwtService.extractUsername("access-jwt")).thenReturn("testuser");
+
+        authService.logout("refresh-abc", "access-jwt");
+
+        verify(refreshTokenService).revoke("refresh-abc");
+        verify(tokenBlacklistService).blacklist("jti-123", 900_000L);
+    }
+
+    @Test
+    @DisplayName("Logout without an access token only revokes the refresh token")
+    void logout_withoutAccessToken_shouldOnlyRevokeRefreshToken() {
+        authService.logout("refresh-abc", null);
+
+        verify(refreshTokenService).revoke("refresh-abc");
+        verifyNoInteractions(tokenBlacklistService);
+    }
+
+    @Test
+    @DisplayName("Logout with an invalid/expired access token does not blacklist anything")
+    void logout_withInvalidAccessToken_shouldNotBlacklist() {
+        when(jwtService.isTokenValid("garbage")).thenReturn(false);
+
+        authService.logout("refresh-abc", "garbage");
+
+        verify(refreshTokenService).revoke("refresh-abc");
+        verifyNoInteractions(tokenBlacklistService);
     }
 }

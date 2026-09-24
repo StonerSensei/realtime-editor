@@ -95,4 +95,48 @@ class JwtServiceTest {
 
         assertFalse(jwtService.isTokenValid(token));
     }
+
+    // ── jti + remaining validity (token blacklist support) ──
+
+    @Test
+    @DisplayName("Generated tokens carry a non-blank jti")
+    void generateToken_shouldIncludeJti() {
+        String token = jwtService.generateToken("testuser");
+
+        String jti = jwtService.extractJti(token);
+
+        assertNotNull(jti);
+        assertFalse(jti.isBlank());
+    }
+
+    @Test
+    @DisplayName("Each token gets a unique jti, even for the same user")
+    void generateToken_shouldUseUniqueJtiPerToken() {
+        String first = jwtService.extractJti(jwtService.generateToken("testuser"));
+        String second = jwtService.extractJti(jwtService.generateToken("testuser"));
+
+        assertNotEquals(first, second);
+    }
+
+    @Test
+    @DisplayName("Remaining validity is positive and bounded by the configured lifetime")
+    void getRemainingValidityMs_shouldBeWithinLifetime() {
+        String token = jwtService.generateToken("testuser");
+
+        long remaining = jwtService.getRemainingValidityMs(token);
+
+        assertTrue(remaining > 0, "fresh token should have time left");
+        assertTrue(remaining <= 3600000L, "cannot exceed the 1h lifetime");
+    }
+
+    @Test
+    @DisplayName("Remaining validity is 0 for expired or invalid tokens")
+    void getRemainingValidityMs_shouldBeZeroForExpiredOrInvalid() {
+        JwtService expiredService = new JwtService(
+                "test-secret-key-for-unit-tests-minimum-32-characters-long", 0L);
+
+        assertEquals(0L, expiredService.getRemainingValidityMs(expiredService.generateToken("u")));
+        assertEquals(0L, jwtService.getRemainingValidityMs("not.a.valid.token"));
+        assertEquals(0L, jwtService.getRemainingValidityMs(null));
+    }
 }
