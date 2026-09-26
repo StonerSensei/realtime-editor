@@ -138,7 +138,9 @@ public class YjsRelayWebSocketHandler extends BinaryWebSocketHandler {
 
         // First on this instance: register the room cluster-wide and learn whether peers on
         // other instances already hold the document. Only a peer that is first everywhere seeds.
-        boolean first = firstLocally[0] && !presenceTracker.markActive(roomId);
+        // Viewers are never first: their SYNC_UPDATE frames are dropped by the relay, so if a
+        // viewer seeded, the next editor would receive nothing and see an empty document.
+        boolean first = role != Role.VIEWER && firstLocally[0] && !presenceTracker.markActive(roomId);
 
         // Tell the new peer whether it is the first in the room (seeding decision).
         send(session, new byte[]{TYPE_PRESENCE, (byte) (first ? 1 : 0)});
@@ -251,6 +253,19 @@ public class YjsRelayWebSocketHandler extends BinaryWebSocketHandler {
                 } catch (Exception e) {
                     log.warn("Failed to disconnect {} from room {}: {}", username, roomId, e.getMessage());
                 }
+            }
+        }
+    }
+
+    /**
+     * Updates the cached role for a user's live sessions so role changes take effect
+     * immediately, without requiring a reconnect.
+     */
+    public void updateRole(String roomId, String username, Role newRole) {
+        for (WebSocketSession session : rooms.getOrDefault(roomId, Set.of())) {
+            if (username.equals(sessionUsers.get(session.getId()))) {
+                sessionRoles.put(session.getId(), newRole);
+                log.info("Live role update: {} in room {} is now {}", username, roomId, newRole);
             }
         }
     }

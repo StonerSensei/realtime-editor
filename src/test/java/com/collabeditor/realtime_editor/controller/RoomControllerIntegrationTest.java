@@ -77,7 +77,7 @@ class RoomControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName("POST /api/rooms/host - should fail without auth token")
-    void createRoom_shouldReturn403WithoutToken() throws Exception {
+    void createRoom_shouldReturn401WithoutToken() throws Exception {
         CreateRoomRequest request = new CreateRoomRequest();
         request.setRoomId("unauthorized-room");
         request.setLanguage("python");
@@ -85,7 +85,7 @@ class RoomControllerIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/api/rooms/host")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

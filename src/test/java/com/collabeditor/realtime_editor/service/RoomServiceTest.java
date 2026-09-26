@@ -260,6 +260,35 @@ class RoomServiceTest {
     }
 
     @Test
+    @DisplayName("Kicked user cannot rejoin, even with the correct code")
+    void kickedUser_cannotRejoin() {
+        Room room = testRoom("test-room-123", "owner-user");
+        room.getMembers().put("bad-user", Role.EDITOR);
+        when(roomRepository.findByRoomId("test-room-123")).thenReturn(Optional.of(room));
+        when(roomRepository.save(any(Room.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        roomService.kickMember("test-room-123", "owner-user", "bad-user");
+
+        assertThrows(ForbiddenActionException.class,
+                () -> roomService.joinRoom("test-room-123", "bad-user", "ABC123"));
+    }
+
+    @Test
+    @DisplayName("Owner can un-kick a user so they can rejoin")
+    void unkick_shouldAllowRejoin() {
+        Room room = testRoom("test-room-123", "owner-user");
+        room.getMembers().put("bad-user", Role.EDITOR);
+        when(roomRepository.findByRoomId("test-room-123")).thenReturn(Optional.of(room));
+        when(roomRepository.save(any(Room.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        roomService.kickMember("test-room-123", "owner-user", "bad-user");
+        roomService.unkick("test-room-123", "owner-user", "bad-user");
+
+        RoomResponse response = roomService.joinRoom("test-room-123", "bad-user", "ABC123");
+        assertEquals(Role.EDITOR, response.getRole());
+    }
+
+    @Test
     @DisplayName("Owner cannot be kicked")
     void kickMember_shouldThrowWhenKickingOwner() {
         Room room = testRoom("test-room-123", "owner-user");

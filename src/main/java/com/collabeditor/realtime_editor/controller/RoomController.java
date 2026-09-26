@@ -103,6 +103,7 @@ public class RoomController {
                                                    @Valid @RequestBody ChangeRoleRequest request,
                                                    Authentication authentication) {
         RoomResponse response = roomService.changeRole(roomId, authentication.getName(), username, request.getRole());
+        yjsRelayWebSocketHandler.updateRole(roomId, username, request.getRole());
         return ResponseEntity.ok(response);
     }
 
@@ -112,6 +113,15 @@ public class RoomController {
                                            Authentication authentication) {
         roomService.kickMember(roomId, authentication.getName(), username);
         yjsRelayWebSocketHandler.disconnectUser(roomId, username);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Un-kick a user so they can rejoin (owner only)")
+    @DeleteMapping("/{roomId}/kicked/{username}")
+    public ResponseEntity<Void> unkick(@PathVariable String roomId,
+                                        @PathVariable String username,
+                                        Authentication authentication) {
+        roomService.unkick(roomId, authentication.getName(), username);
         return ResponseEntity.noContent().build();
     }
 

@@ -38,6 +38,9 @@ public class Room {
     /** Usernames that may join without the code (consumed on join). */
     private Set<String> invitedUsers = new HashSet<>();
 
+    /** Usernames that have been kicked; cannot rejoin until un-kicked by the owner. */
+    private Set<String> kickedUsers = new HashSet<>();
+
     private Instant createdAt;
 
     public Room(String roomId, String language, String owner, String joinCode) {
@@ -49,6 +52,7 @@ public class Room {
         this.members = new HashMap<>();
         this.members.put(owner, Role.OWNER);
         this.invitedUsers = new HashSet<>();
+        this.kickedUsers = new HashSet<>();
         this.createdAt = Instant.now();
     }
 }

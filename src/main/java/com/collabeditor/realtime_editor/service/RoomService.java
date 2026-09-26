@@ -66,7 +66,11 @@ public class RoomService {
             return toResponse(room, username, "Joined room successfully");
         }
 
-        // Not yet a member: check invitation or code.
+        // Not yet a member: check they haven't been kicked, then check invitation or code.
+        if (room.getKickedUsers() != null && room.getKickedUsers().contains(username)) {
+            throw new ForbiddenActionException("You have been removed from this room");
+        }
+
         boolean invited = room.getInvitedUsers() != null && room.getInvitedUsers().remove(username);
         if (!invited) {
             if (joinCode == null || joinCode.isBlank()) {
@@ -193,8 +197,25 @@ public class RoomService {
         }
 
         room.getMembers().remove(targetUser);
+        if (room.getKickedUsers() == null) {
+            room.setKickedUsers(new java.util.HashSet<>());
+        }
+        room.getKickedUsers().add(targetUser);
         roomRepository.save(room);
         log.info("User {} kicked from room {} by {}", targetUser, roomId, actor);
+    }
+
+    /** Owner un-kicks a user so they can rejoin with the code or an invitation. */
+    public void unkick(String roomId, String actor, String targetUser) {
+        Room room = roomRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new RoomNotFoundException(roomId));
+        requireOwner(room, actor);
+
+        if (room.getKickedUsers() == null || !room.getKickedUsers().remove(targetUser)) {
+            throw new ForbiddenActionException(targetUser + " is not on the kicked list");
+        }
+        roomRepository.save(room);
+        log.info("User {} un-kicked from room {} by {}", targetUser, roomId, actor);
     }
 
     /** Returns the user's role in a room, or {@code null} if they are not a member. */
