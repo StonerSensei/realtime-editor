@@ -335,6 +335,103 @@
         }
     }
 
+    // ── Join Code (owner only) ────────────────
+    function setupJoinCode() {
+        if (!isOwner()) return;
+        const section = document.getElementById("joinCodeSection");
+        const display = document.getElementById("joinCodeDisplay");
+        const copyBtn = document.getElementById("copyCodeBtn");
+        const regenBtn = document.getElementById("regenerateCodeBtn");
+        if (!section || !display) return;
+
+        section.classList.remove("hidden");
+
+        // Fetch and display the code (only returned for owners via the API)
+        API.get(`/api/rooms/${ctx.roomId}`)
+            .then(data => { if (data.joinCode) display.textContent = data.joinCode; })
+            .catch(() => {});
+
+        copyBtn?.addEventListener("click", () => {
+            navigator.clipboard.writeText(display.textContent)
+                .then(() => Toast.show("Code copied!", "success"))
+                .catch(() => Toast.show("Copy failed", "error"));
+        });
+
+        regenBtn?.addEventListener("click", async () => {
+            if (!confirm("Generate a new join code? The old code will stop working.")) return;
+            try {
+                const data = await API.post(`/api/rooms/${ctx.roomId}/regenerate-code`, {});
+                display.textContent = data.joinCode;
+                Toast.show("New code generated", "success");
+            } catch (err) {
+                Toast.show(err.message, "error");
+            }
+        });
+    }
+
+    // ── Invite (owner only) ──────────────────────
+    function setupInvite() {
+        if (!isOwner()) return;
+        const section = document.getElementById("inviteSection");
+        const input = document.getElementById("inviteInput");
+        const sendBtn = document.getElementById("inviteSendBtn");
+        const results = document.getElementById("inviteResults");
+        if (!section || !input) return;
+
+        section.classList.remove("hidden");
+        let searchTimer = null;
+        let selectedUser = null;
+
+        input.addEventListener("input", () => {
+            clearTimeout(searchTimer);
+            selectedUser = null;
+            sendBtn.disabled = true;
+            const q = input.value.trim();
+            if (q.length < 2) { results.innerHTML = ""; return; }
+            searchTimer = setTimeout(() => searchUsers(q), 300);
+        });
+
+        async function searchUsers(q) {
+            try {
+                const users = await API.get(`/api/rooms/users/search?q=${encodeURIComponent(q)}`);
+                results.innerHTML = "";
+                (users || []).forEach(username => {
+                    if (username === ctx.username) return; // don't show self
+                    if (membersByName[username]) return;   // already a member
+                    const li = document.createElement("li");
+                    li.style.cssText = "padding:5px 8px; cursor:pointer; border-radius:4px; font-size:0.85rem;";
+                    li.textContent = username;
+                    li.addEventListener("mouseenter", () => li.style.background = "var(--secondary)");
+                    li.addEventListener("mouseleave", () => li.style.background = "transparent");
+                    li.addEventListener("click", () => {
+                        input.value = username;
+                        selectedUser = username;
+                        sendBtn.disabled = false;
+                        results.innerHTML = "";
+                    });
+                    results.appendChild(li);
+                });
+            } catch (e) { /* ignore */ }
+        }
+
+        sendBtn.addEventListener("click", async () => {
+            if (!selectedUser) return;
+            try {
+                await API.post(`/api/rooms/${ctx.roomId}/invite`, { username: selectedUser });
+                Toast.show(`Invited ${selectedUser}`, "success");
+                input.value = "";
+                selectedUser = null;
+                sendBtn.disabled = true;
+            } catch (err) {
+                Toast.show(err.message, "error");
+            }
+        });
+
+        input.addEventListener("keypress", (e) => {
+            if (e.key === "Enter" && selectedUser) sendBtn.click();
+        });
+    }
+
     // ── Bootstrap ─────────────────────────────────
     window.addEventListener("editor-ready", (e) => {
         ctx = {
@@ -348,6 +445,8 @@
 
         setupDrawer();
         setupChat();
+        setupJoinCode();
+        setupInvite();
         if (window.Collab) wireParticipants();
     });
 

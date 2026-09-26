@@ -8,7 +8,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @Document("rooms")
 @Data
@@ -29,15 +31,24 @@ public class Room {
 
     private Map<String, Role> members = new HashMap<>();
 
+    /** 6-character alphanumeric code required to join (unless invited). */
+    @Indexed(unique = true)
+    private String joinCode;
+
+    /** Usernames that may join without the code (consumed on join). */
+    private Set<String> invitedUsers = new HashSet<>();
+
     private Instant createdAt;
 
-    public Room(String roomId, String language, String owner) {
+    public Room(String roomId, String language, String owner, String joinCode) {
         this.roomId = roomId;
         this.language = language;
         this.owner = owner;
+        this.joinCode = joinCode;
         this.defaultRole = Role.EDITOR;
         this.members = new HashMap<>();
         this.members.put(owner, Role.OWNER);
+        this.invitedUsers = new HashSet<>();
         this.createdAt = Instant.now();
     }
 }

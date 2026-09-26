@@ -1,6 +1,7 @@
 package com.collabeditor.realtime_editor.service;
 
 import com.collabeditor.realtime_editor.dto.request.CreateRoomRequest;
+import com.collabeditor.realtime_editor.dto.response.InvitationResponse;
 import com.collabeditor.realtime_editor.dto.response.MemberDto;
 import com.collabeditor.realtime_editor.dto.response.RoomResponse;
 import com.collabeditor.realtime_editor.exception.ForbiddenActionException;
@@ -9,10 +10,12 @@ import com.collabeditor.realtime_editor.exception.RoomNotFoundException;
 import com.collabeditor.realtime_editor.model.Role;
 import com.collabeditor.realtime_editor.model.Room;
 import com.collabeditor.realtime_editor.repository.RoomRepository;
+import com.collabeditor.realtime_editor.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.List;
 
 @Slf4j
@@ -20,7 +23,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RoomService {
 
+    private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1
+    private static final int CODE_LENGTH = 6;
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final RoomRepository roomRepository;
+    private final UserRepository userRepository;
+
+    // ── Create ────────────────────────────────────
 
     public RoomResponse createRoom(CreateRoomRequest request, String owner) {
         String roomId = request.getRoomId();
@@ -29,32 +39,114 @@ public class RoomService {
             throw new RoomAlreadyExistsException(roomId);
         }
 
-        Room room = new Room(roomId, request.getLanguage(), owner);
+        Room room = new Room(roomId, request.getLanguage(), owner, generateJoinCode());
         Room saved = roomRepository.save(room);
 
-        log.info("Room created: {} by user: {}", roomId, owner);
+        log.info("Room created: {} by user: {} (code: {})", roomId, owner, saved.getJoinCode());
         return toResponse(saved, owner, "Room created successfully");
     }
 
-    /** Joins the room, adding the user as a member with the default role if not already present. */
-    public RoomResponse joinRoom(String roomId, String username) {
+    // ── Join ──────────────────────────────────────
+
+    /**
+     * Joins the room. The caller must be an existing member, hold a pending invitation,
+     * or supply the correct join code.
+     */
+    public RoomResponse joinRoom(String roomId, String username, String joinCode) {
         Room room = roomRepository.findByRoomId(roomId)
                 .orElseThrow(() -> new RoomNotFoundException(roomId));
 
         boolean changed = ensureOwnerMembership(room);
 
-        if (!room.getMembers().containsKey(username)) {
-            Role role = room.getDefaultRole() != null ? room.getDefaultRole() : Role.EDITOR;
-            room.getMembers().put(username, role);
-            changed = true;
-            log.info("User {} joined room {} as {}", username, roomId, role);
+        if (room.getMembers().containsKey(username)) {
+            // Already a member: let them back in without a code.
+            if (changed) {
+                room = roomRepository.save(room);
+            }
+            return toResponse(room, username, "Joined room successfully");
         }
 
-        if (changed) {
-            room = roomRepository.save(room);
+        // Not yet a member: check invitation or code.
+        boolean invited = room.getInvitedUsers() != null && room.getInvitedUsers().remove(username);
+        if (!invited) {
+            if (joinCode == null || joinCode.isBlank()) {
+                throw new ForbiddenActionException("A join code is required to enter this room");
+            }
+            if (!joinCode.equalsIgnoreCase(room.getJoinCode())) {
+                throw new ForbiddenActionException("Invalid join code");
+            }
         }
+
+        Role role = room.getDefaultRole() != null ? room.getDefaultRole() : Role.EDITOR;
+        room.getMembers().put(username, role);
+        log.info("User {} joined room {} as {} ({})", username, roomId, role,
+                invited ? "invited" : "code");
+
+        room = roomRepository.save(room);
         return toResponse(room, username, "Joined room successfully");
     }
+
+    // ── Invitations ───────────────────────────────
+
+    /** Owner invites a user. The user must exist. */
+    public void invite(String roomId, String actor, String targetUsername) {
+        Room room = roomRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new RoomNotFoundException(roomId));
+        requireOwner(room, actor);
+
+        if (!userRepository.existsByUsername(targetUsername)) {
+            throw new ForbiddenActionException("User not found: " + targetUsername);
+        }
+        if (room.getMembers().containsKey(targetUsername)) {
+            throw new ForbiddenActionException(targetUsername + " is already a member");
+        }
+
+        room.getInvitedUsers().add(targetUsername);
+        roomRepository.save(room);
+        log.info("User {} invited to room {} by {}", targetUsername, roomId, actor);
+    }
+
+    /** Owner revokes a pending invitation. */
+    public void revokeInvite(String roomId, String actor, String targetUsername) {
+        Room room = roomRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new RoomNotFoundException(roomId));
+        requireOwner(room, actor);
+
+        if (room.getInvitedUsers() == null || !room.getInvitedUsers().remove(targetUsername)) {
+            throw new ForbiddenActionException("No pending invitation for " + targetUsername);
+        }
+        roomRepository.save(room);
+        log.info("Invitation for {} to room {} revoked by {}", targetUsername, roomId, actor);
+    }
+
+    /** Returns rooms the user has been invited to (for the lobby). */
+    public List<InvitationResponse> getInvitations(String username) {
+        return roomRepository.findByInvitedUsersContaining(username).stream()
+                .map(room -> InvitationResponse.builder()
+                        .roomId(room.getRoomId())
+                        .language(room.getLanguage())
+                        .owner(room.getOwner())
+                        .createdAt(room.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+    // ── Join code management ──────────────────────
+
+    /** Owner regenerates the join code (old code stops working). */
+    public String regenerateJoinCode(String roomId, String actor) {
+        Room room = roomRepository.findByRoomId(roomId)
+                .orElseThrow(() -> new RoomNotFoundException(roomId));
+        requireOwner(room, actor);
+
+        String newCode = generateJoinCode();
+        room.setJoinCode(newCode);
+        roomRepository.save(room);
+        log.info("Join code for room {} regenerated by {}", roomId, actor);
+        return newCode;
+    }
+
+    // ── Room details ──────────────────────────────
 
     public RoomResponse getRoomDetails(String roomId, String username) {
         Room room = roomRepository.findByRoomId(roomId)
@@ -65,21 +157,7 @@ public class RoomService {
         return toResponse(room, username, null);
     }
 
-    /**
-     * Self-heals rooms created before the roles feature existed: guarantees the
-     * room's owner is present in the members map with the OWNER role. Returns
-     * {@code true} if the room was modified.
-     */
-    private boolean ensureOwnerMembership(Room room) {
-        if (room.getMembers() == null) {
-            room.setMembers(new java.util.HashMap<>());
-        }
-        if (room.getOwner() != null && room.getMembers().get(room.getOwner()) != Role.OWNER) {
-            room.getMembers().put(room.getOwner(), Role.OWNER);
-            return true;
-        }
-        return false;
-    }
+    // ── Role management ───────────────────────────
 
     public RoomResponse changeRole(String roomId, String actor, String targetUser, Role newRole) {
         Room room = roomRepository.findByRoomId(roomId)
@@ -130,6 +208,34 @@ public class RoomService {
         return roomRepository.existsByRoomId(roomId);
     }
 
+    // ── User search ───────────────────────────────
+
+    /** Searches users by partial username (for the invite UI). */
+    public List<String> searchUsers(String query) {
+        return userRepository.findByUsernameContainingIgnoreCase(query).stream()
+                .map(u -> u.getUsername())
+                .limit(10)
+                .toList();
+    }
+
+    // ── Internal ──────────────────────────────────
+
+    /**
+     * Self-heals rooms created before the roles feature existed: guarantees the
+     * room's owner is present in the members map with the OWNER role. Returns
+     * {@code true} if the room was modified.
+     */
+    private boolean ensureOwnerMembership(Room room) {
+        if (room.getMembers() == null) {
+            room.setMembers(new java.util.HashMap<>());
+        }
+        if (room.getOwner() != null && room.getMembers().get(room.getOwner()) != Role.OWNER) {
+            room.getMembers().put(room.getOwner(), Role.OWNER);
+            return true;
+        }
+        return false;
+    }
+
     private void requireOwner(Room room, String actor) {
         if (!actor.equals(room.getOwner())) {
             throw new ForbiddenActionException("Only the room owner can perform this action");
@@ -147,8 +253,17 @@ public class RoomService {
                 .owner(room.getOwner())
                 .role(room.getMembers().get(username))
                 .members(members)
+                .joinCode(username.equals(room.getOwner()) ? room.getJoinCode() : null)
                 .createdAt(room.getCreatedAt())
                 .message(message)
                 .build();
+    }
+
+    private String generateJoinCode() {
+        StringBuilder sb = new StringBuilder(CODE_LENGTH);
+        for (int i = 0; i < CODE_LENGTH; i++) {
+            sb.append(CODE_CHARS.charAt(RANDOM.nextInt(CODE_CHARS.length())));
+        }
+        return sb.toString();
     }
 }

@@ -94,6 +94,51 @@
             .btn-group { flex-direction: column; }
             h1 { font-size: 1.8rem; }
         }
+        .invitations-section {
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .invitations-section h3 {
+            color: var(--accent);
+            font-size: 1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .invitation-list {
+            list-style: none;
+        }
+
+        .invitation-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.7rem 1rem;
+            background: var(--secondary);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .invitation-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .invitation-room {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .invitation-owner {
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+
+        .invitation-item .btn {
+            padding: 6px 14px;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -109,6 +154,11 @@
     <div class="input-group">
         <label for="roomId"><i class="fas fa-door-open"></i> Room ID</label>
         <input id="roomId" type="text" placeholder="Enter room ID or leave blank to generate">
+    </div>
+
+    <div class="input-group">
+        <label for="joinCode"><i class="fas fa-key"></i> Join Code <span style="opacity:0.6">(required for new rooms)</span></label>
+        <input id="joinCode" type="text" placeholder="6-character code from the room owner" maxlength="6" style="text-transform:uppercase; letter-spacing:3px; font-size:1.1rem; text-align:center">
     </div>
 
     <div class="language-selector">
@@ -129,6 +179,11 @@
         <button class="btn btn-success" onclick="hostRoom()">
             <i class="fas fa-plus"></i> Create Room
         </button>
+    </div>
+
+    <div id="invitationsSection" class="invitations-section hidden">
+        <h3><i class="fas fa-envelope"></i> Invitations</h3>
+        <ul id="invitationList" class="invitation-list"></ul>
     </div>
 </div>
 

@@ -21,5 +21,6 @@ public class RoomResponse {
     private Role role;
     private List<MemberDto> members;
     private Instant createdAt;
+    private String joinCode;
     private String message;
 }

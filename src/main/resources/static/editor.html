@@ -113,6 +113,31 @@
 
             <!-- Participants -->
             <div class="drawer-panel hidden" id="panel-participants">
+                <!-- Join code (owner only) -->
+                <div id="joinCodeSection" class="hidden" style="margin-bottom:1rem; padding:0.8rem; background:var(--secondary); border-radius:6px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+                        <span style="font-size:0.8rem; color:var(--accent);"><i class="fas fa-key"></i> Join Code</span>
+                        <button class="icon-btn" id="regenerateCodeBtn" title="Generate new code" style="font-size:0.75rem; color:var(--warning); cursor:pointer; background:none; border:none;">
+                            <i class="fas fa-rotate"></i>
+                        </button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="joinCodeDisplay" style="font-size:1.3rem; letter-spacing:4px; font-weight:700; color:var(--text);"></span>
+                        <button class="icon-btn" id="copyCodeBtn" title="Copy code" style="cursor:pointer; background:none; border:none; color:var(--info);">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Invite (owner only) -->
+                <div id="inviteSection" class="hidden" style="margin-bottom:1rem;">
+                    <div style="display:flex; gap:6px;">
+                        <input id="inviteInput" type="text" placeholder="Search username to invite..." style="flex:1; padding:7px 10px; font-size:0.85rem;">
+                        <button id="inviteSendBtn" class="btn btn-success" style="padding:7px 12px; font-size:0.85rem;" disabled>
+                            <i class="fas fa-user-plus"></i>
+                        </button>
+                    </div>
+                    <ul id="inviteResults" style="list-style:none; margin-top:4px;"></ul>
+                </div>
                 <ul class="participant-list" id="participantList"></ul>
             </div>
 
