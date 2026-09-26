@@ -20,6 +20,46 @@ docker logs mongodb
 docker rm -f mongodb
 ```
 
+## Redis (or Valkey)
+
+Redis is used for distributed rate limiting, access-token blacklisting, and
+cross-instance Pub/Sub fanout. It is **optional** — every feature falls back to
+in-memory when Redis is unavailable — but required for multi-instance setups.
+
+```bash
+# Start a Redis container (first time)
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# Start/Stop
+docker start redis
+docker stop redis
+
+# If you have Valkey installed as a system service (e.g. Arch Linux), it works too:
+sudo systemctl start valkey
+sudo systemctl stop valkey
+
+# Check connectivity
+redis-cli ping               # or: valkey-cli ping  → PONG
+
+# Inspect CollabIDE keys
+redis-cli KEYS 'ratelimit:*'          # rate-limit counters
+redis-cli KEYS 'blacklist:*'          # revoked access-token JTIs
+redis-cli KEYS 'collab:presence:*'    # rooms with active peers
+redis-cli PSUBSCRIBE 'collab:*'       # watch Pub/Sub traffic live (Ctrl+C to stop)
+
+# Flush all CollabIDE keys (without dropping other data)
+redis-cli --scan --pattern 'ratelimit:*' | xargs -r redis-cli DEL
+redis-cli --scan --pattern 'blacklist:*' | xargs -r redis-cli DEL
+redis-cli --scan --pattern 'collab:*'    | xargs -r redis-cli DEL
+```
+
+Environment variables (safe defaults for local dev):
+
+```bash
+REDIS_HOST=localhost    # default
+REDIS_PORT=6379         # default
+```
+
 ## Code Execution (ephemeral Docker containers)
 
 Code runs in throwaway Docker containers. Pre-pull the language images once so the
@@ -89,13 +129,13 @@ db.dropDatabase()
 ## Build → Run (full sequence)
 
 ```bash
-# 1. Start MongoDB (must be running first)
-docker start mongodb
+# 1. Start MongoDB + Redis (must be running first; Redis is optional but recommended)
+docker start mongodb redis        # or: docker start mongodb && sudo systemctl start valkey
 
 # 2. Build (from the project root)
 cd /home/parth/Documents/Projects/realtime-editor
 ./mvnw clean package -DskipTests        # fast build, skips tests
-# ./mvnw clean package                  # build + run full test suite (needs MongoDB)
+# ./mvnw clean package                  # build + run full test suite (needs MongoDB + Redis)
 
 # 3. Run - choose one:
 java -jar target/realtime-editor-0.0.1-SNAPSHOT.jar   # recommended (avoids IDE stale-class issues)
@@ -105,19 +145,22 @@ java -jar target/realtime-editor-0.0.1-SNAPSHOT.jar   # recommended (avoids IDE 
 Day-to-day quick start (everything already set up):
 
 ```bash
-docker start mongodb
+docker start mongodb redis
 cd /home/parth/Documents/Projects/realtime-editor
 ./mvnw clean package -DskipTests
 java -jar target/realtime-editor-0.0.1-SNAPSHOT.jar
 ```
+
+The app starts normally without Redis — you'll see a warning in the log and all
+Redis features fall back to in-memory.
 
 Tip: if you ever see `java.lang.Error: Unresolved compilation problem`, it's stale
 IDE-compiled bytecode - run `./mvnw clean package` and launch the jar (not the IDE Run button).
 
 ## Docker Compose (app + MongoDB in one command)
 
-Runs the whole stack: MongoDB + the app (which itself shells out to the host Docker
-daemon to run code sandboxes).
+Runs the whole stack: MongoDB + Redis + the app (which itself shells out to the host
+Docker daemon to run code sandboxes).
 
 ```bash
 # 0. One-time: create your local secrets file
@@ -136,6 +179,7 @@ docker compose up --build
 
 # App:      http://localhost:8080
 # MongoDB:  internal only (service name "mongo"); not exposed to host by default
+# Redis:    internal only (service name "redis"); not exposed to host by default
 
 # ── Managing the stack ──
 docker compose ps                 # status
@@ -201,11 +245,11 @@ GitHub and the pipeline runs automatically.
 # Run ALL tests (needs MongoDB running)
 ./mvnw test
 
-# Run only unit tests (no MongoDB needed)
-./mvnw test -Dtest="JwtServiceTest,AuthServiceTest,RoomServiceTest,SnapshotServiceTest"
+# Run only unit tests (no external deps needed)
+./mvnw test -Dtest="JwtServiceTest,AuthServiceTest,RoomServiceTest,SnapshotServiceTest,TokenBlacklistServiceTest,RateLimiterServiceTest,RedisRoomBrokerTest,RoomPresenceTrackerTest,YjsRelayWebSocketHandlerTest,ChatWebSocketHandlerTest,JwtAuthenticationFilterTest,ResilientRedisMessageListenerContainerTest"
 
-# Run only integration tests (needs MongoDB)
-./mvnw test -Dtest="AuthControllerIntegrationTest,RoomControllerIntegrationTest"
+# Run only integration tests (needs MongoDB; CrossInstanceFanoutIntegrationTest also needs Redis)
+./mvnw test -Dtest="AuthControllerIntegrationTest,RoomControllerIntegrationTest,RateLimitIntegrationTest,LogoutBlacklistIntegrationTest,CrossInstanceFanoutIntegrationTest"
 
 # Run a single test class
 ./mvnw test -Dtest="JwtServiceTest"
@@ -240,10 +284,13 @@ curl -X POST http://localhost:8080/api/auth/refresh \
   -H "Content-Type: application/json" \
   -d "{\"refreshToken\":\"$REFRESH\"}"
 
-# Logout: revoke a refresh token
+# Logout: revoke the refresh token AND blacklist the access token immediately
 curl -X POST http://localhost:8080/api/auth/logout \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"refreshToken\":\"$REFRESH\"}"
+# Omitting the Authorization header still revokes the refresh token,
+# but the access token stays valid until it expires (~30 min).
 
 # ── Rooms ──
 # Create room (creator becomes OWNER)
@@ -317,7 +364,12 @@ docker stop $(docker ps -q)
 
 ## Rate limiting
 
-Auth endpoints (`/api/auth/**`) are rate-limited per client IP (token bucket, Bucket4j).
+Auth endpoints (`/api/auth/**`) are rate-limited per client IP. The primary limiter
+uses a Redis fixed-window counter (`INCR` + `PEXPIRE` via a Lua script, key
+`ratelimit:{ip}`); if Redis is unavailable it falls back to an in-memory Bucket4j
+token bucket per IP. After a Redis error, Redis is skipped for 5 seconds so a
+Redis outage does not add a connection timeout to every auth request.
+
 Exceeding the limit returns HTTP 429. Tunable via env vars:
 
 ```bash
@@ -367,11 +419,14 @@ capture the whole project (all files) and restore replaces every file.
 src/main/java/com/collabeditor/realtime_editor/
 ├── RealtimeEditorApplication.java
 ├── config/          (SecurityConfig, WebSocketConfig, JwtAuthenticationFilter,
-│                     RateLimitFilter, OpenApiConfig)
+│                     RateLimitFilter, RedisConfig, ResilientRedisMessageListenerContainer,
+│                     OpenApiConfig)
 ├── controller/      (AuthController, RoomController, SnapshotController,
 │                     ChatController, CodeExecutionController)
-├── service/         (AuthService, JwtService, RefreshTokenService, RoomService,
-│                     SnapshotService, ChatService, CodeExecutionService)
+├── service/         (AuthService, JwtService, RefreshTokenService, TokenBlacklistService,
+│                     RateLimiterService, RoomService, SnapshotService, ChatService,
+│                     CodeExecutionService)
+├── messaging/       (RedisRoomBroker, RoomPresenceTracker)
 ├── repository/      (UserRepository, RefreshTokenRepository, RoomRepository,
 │                     CodeSnapshotRepository, ChatMessageRepository)
 ├── model/           (User, RefreshToken, Room, Role, CodeSnapshot, ChatMessage)
@@ -420,3 +475,79 @@ docker-compose.yml       app + mongo, docker.sock + shared exec dir mounts
 .env.example             template for local secrets (copy to .env, git-ignored)
 .github/workflows/ci.yml build + test (mongo service) + build/push Docker image to GHCR
 ```
+
+## Two-instance fanout demo
+
+Redis Pub/Sub lets multiple app instances relay edits and chat to each other.
+To test this locally:
+
+```bash
+# 1. Databases must be running and accessible from the host
+docker start mongodb
+# Redis/Valkey must be on localhost:6379 (system service or Docker with -p 6379:6379)
+
+# 2. Build once
+./mvnw clean package -DskipTests
+
+# 3. Start two instances (they MUST share the same JWT_SECRET)
+java -jar target/realtime-editor-0.0.1-SNAPSHOT.jar                   # instance 1 on :8080
+PORT=8081 java -jar target/realtime-editor-0.0.1-SNAPSHOT.jar         # instance 2 on :8081
+```
+
+Both logs should show `Subscribed to collab:yjs:*`.
+
+Open the same room on `localhost:8080` (browser 1) and `localhost:8081` (browser 2).
+Edits and chat typed on one side appear on the other.
+
+Watch the traffic:
+
+```bash
+redis-cli PSUBSCRIBE 'collab:*'                       # live Pub/Sub stream
+redis-cli ZRANGE collab:presence:<roomId> 0 -1         # instance IDs with peers
+```
+
+## Degraded mode (Redis down)
+
+Every Redis-backed feature has an in-memory fallback. The app boots and runs
+normally without Redis; cross-instance features simply don't activate.
+
+| Feature | With Redis | Without Redis |
+|---------|-----------|---------------|
+| Rate limiting | Redis fixed-window (shared across instances) | In-memory Bucket4j (per-instance) |
+| Token blacklist | Shared across instances via `blacklist:{jti}` | Local-only; fail-open on read |
+| Yjs/Chat fanout | Pub/Sub across instances | Local delivery only |
+| Room presence | Cluster-wide "am I first?" check | Per-instance only |
+| Pub/Sub container | Subscribes; auto-recovers on disconnect | Retries every 2s until Redis appears |
+
+After a Redis error, each feature skips Redis for 5 seconds (cooldown) so a
+Redis outage does not add a connection timeout to every request.
+
+**Recovery is automatic.** When Redis comes back:
+1. The Pub/Sub container re-subscribes.
+2. Every client is asked to re-broadcast its full document (Yjs resync), so
+   edits made during the outage on different instances merge automatically.
+3. The room presence tracker re-registers every active room immediately.
+
+To test:
+
+```bash
+# Stop Redis while two instances are running
+sudo systemctl stop valkey        # or: redis-cli shutdown nosave
+
+# Both instances keep working locally; edits don't cross between them.
+# Make an edit on each side.
+
+# Bring Redis back
+sudo systemctl start valkey       # or: docker start redis
+
+# Within seconds, both sides show the same merged document.
+# Logs show: "Subscribed to collab:yjs:*" and "Requesting full Yjs resync"
+```
+
+## Per-instance roster limitation
+
+The online count and participant list in the editor show users connected to
+**your own app instance**, not the cluster-wide total. With one instance this
+is invisible; with two, each side's count reflects only its own connections.
+A cluster-wide roster would need a shared presence data structure beyond the
+current room-level tracker (a possible future improvement).
