@@ -116,7 +116,9 @@ public class YjsRelayWebSocketHandler extends BinaryWebSocketHandler {
         String username = jwtService.extractUsername(token);
         Role role = roomService.getRole(roomId, username);
         if (role == null) {
-            role = Role.VIEWER; // Not a member: safest default
+            log.warn("Rejecting Yjs connection to room '{}': user '{}' is not a member", roomId, username);
+            rawSession.close(CloseStatus.POLICY_VIOLATION);
+            return;
         }
 
         WebSocketSession session = new ConcurrentWebSocketSessionDecorator(

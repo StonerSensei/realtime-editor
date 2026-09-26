@@ -4,6 +4,7 @@ import com.collabeditor.realtime_editor.dto.response.ChatMessageResponse;
 import com.collabeditor.realtime_editor.messaging.RedisRoomBroker;
 import com.collabeditor.realtime_editor.service.ChatService;
 import com.collabeditor.realtime_editor.service.JwtService;
+import com.collabeditor.realtime_editor.service.RoomService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final JwtService jwtService;
     private final ChatService chatService;
+    private final RoomService roomService;
     private final ObjectMapper objectMapper;
     private final RedisRoomBroker broker;
 
@@ -70,8 +72,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         WebSocketSession session = new ConcurrentWebSocketSessionDecorator(
                 rawSession, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
+        String username = jwtService.extractUsername(token);
+
+        if (roomService.getRole(roomId, username) == null) {
+            log.warn("Rejecting chat connection to room '{}': user '{}' is not a member", roomId, username);
+            rawSession.close(CloseStatus.POLICY_VIOLATION);
+            return;
+        }
+
         sessions.put(session.getId(), session);
-        sessionUsers.put(session.getId(), jwtService.extractUsername(token));
+        sessionUsers.put(session.getId(), username);
         rooms.compute(roomId, (id, peers) -> {
             Set<WebSocketSession> set = peers != null ? peers : ConcurrentHashMap.newKeySet();
             set.add(session);
