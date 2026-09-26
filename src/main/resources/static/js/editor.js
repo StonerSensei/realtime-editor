@@ -100,7 +100,7 @@
         output.textContent = `Executing ${activeFileName()}...\n`;
         Toast.show("Executing code...", "info");
 
-        const execSocket = new WebSocket(getWebSocketUrl("/ws/exec"));
+        const execSocket = new WebSocket(getWebSocketUrl(`/ws/exec?token=${encodeURIComponent(Auth.getToken())}`));
         execSocket.onopen = () => execSocket.send(JSON.stringify({ language: runLang, code, input }));
         execSocket.onmessage = (e) => {
             output.textContent += e.data + "\n";
