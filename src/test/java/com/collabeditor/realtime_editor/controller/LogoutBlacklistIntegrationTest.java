@@ -39,9 +39,10 @@ class LogoutBlacklistIntegrationTest extends BaseIntegrationTest {
 
     private String accessToken;
     private String refreshToken;
+    private String roomId;
 
     @BeforeEach
-    void registerUser() throws Exception {
+    void registerAndCreateRoom() throws Exception {
         userRepository.deleteAll();
 
         RegisterRequest reg = new RegisterRequest();
@@ -58,12 +59,21 @@ class LogoutBlacklistIntegrationTest extends BaseIntegrationTest {
         JsonNode json = objectMapper.readTree(body);
         accessToken = json.get("token").asText();
         refreshToken = json.get("refreshToken").asText();
+
+        // Create a room the user owns, so /api/chat/{roomId} passes the membership check.
+        roomId = "bl-" + UUID.randomUUID().toString().substring(0, 8);
+        mockMvc.perform(post("/api/rooms/host")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                Map.of("roomId", roomId, "language", "javascript"))))
+                .andExpect(status().isCreated());
     }
 
     @Test
     @DisplayName("Protected call works, then returns 401 with the same token after logout")
     void accessToken_shouldBeRejectedAfterLogout() throws Exception {
-        mockMvc.perform(get("/api/chat/any-room").header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/chat/" + roomId).header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/auth/logout")
@@ -72,7 +82,7 @@ class LogoutBlacklistIntegrationTest extends BaseIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/chat/any-room").header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/chat/" + roomId).header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -85,7 +95,7 @@ class LogoutBlacklistIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isNoContent());
 
         // Access token was not sent, so it stays valid until it expires...
-        mockMvc.perform(get("/api/chat/any-room").header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/chat/" + roomId).header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk());
 
         // ...but the refresh token can no longer mint new ones.

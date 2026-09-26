@@ -120,6 +120,18 @@ class YjsRelayWebSocketHandlerTest {
     }
 
     @Test
+    @DisplayName("Connect - rejects a non-member (getRole returns null)")
+    void connect_shouldRejectNonMember() throws Exception {
+        when(roomService.getRole(ROOM, "stranger")).thenReturn(null);
+        FakeWebSocketSession session = FakeWebSocketSession.forRoom("/yjs", ROOM, jwtService.generateToken("stranger"));
+
+        handler.afterConnectionEstablished(session);
+
+        assertThat(session.getCloseStatus()).isEqualTo(CloseStatus.POLICY_VIOLATION);
+        verify(presenceTracker, never()).markActive(anyString());
+    }
+
+    @Test
     @DisplayName("Connect - first peer everywhere is told it is first (PRESENCE=1)")
     void connect_firstEverywhereShouldSeed() throws Exception {
         when(presenceTracker.markActive(ROOM)).thenReturn(false);

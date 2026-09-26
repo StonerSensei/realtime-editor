@@ -4,6 +4,7 @@ import com.collabeditor.realtime_editor.dto.response.ChatMessageResponse;
 import com.collabeditor.realtime_editor.messaging.RedisRoomBroker;
 import com.collabeditor.realtime_editor.service.ChatService;
 import com.collabeditor.realtime_editor.service.JwtService;
+import com.collabeditor.realtime_editor.service.RoomService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +35,9 @@ class ChatWebSocketHandlerTest {
     private ChatService chatService;
 
     @Mock
+    private RoomService roomService;
+
+    @Mock
     private RedisRoomBroker broker;
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -43,10 +47,11 @@ class ChatWebSocketHandlerTest {
     @BeforeEach
     void setUp() {
         jwtService = new JwtService(SECRET, 3_600_000L);
-        handler = new ChatWebSocketHandler(jwtService, chatService, objectMapper, broker);
+        handler = new ChatWebSocketHandler(jwtService, chatService, roomService, objectMapper, broker);
     }
 
     private FakeWebSocketSession connect(String username) throws Exception {
+        when(roomService.getRole(ROOM, username)).thenReturn(com.collabeditor.realtime_editor.model.Role.EDITOR);
         FakeWebSocketSession session = FakeWebSocketSession.forRoom("/ws/chat", ROOM, jwtService.generateToken(username));
         handler.afterConnectionEstablished(session);
         return session;
@@ -102,6 +107,17 @@ class ChatWebSocketHandlerTest {
     @DisplayName("Invalid token: connection closed with POLICY_VIOLATION")
     void invalidToken_shouldBeRejected() throws Exception {
         FakeWebSocketSession session = FakeWebSocketSession.forRoom("/ws/chat", ROOM, "bad");
+
+        handler.afterConnectionEstablished(session);
+
+        assertThat(session.getCloseStatus()).isEqualTo(CloseStatus.POLICY_VIOLATION);
+    }
+
+    @Test
+    @DisplayName("Non-member: connection closed with POLICY_VIOLATION")
+    void nonMember_shouldBeRejected() throws Exception {
+        when(roomService.getRole(ROOM, "stranger")).thenReturn(null);
+        FakeWebSocketSession session = FakeWebSocketSession.forRoom("/ws/chat", ROOM, jwtService.generateToken("stranger"));
 
         handler.afterConnectionEstablished(session);
 

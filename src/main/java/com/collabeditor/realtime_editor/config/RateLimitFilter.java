@@ -54,11 +54,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return !request.getRequestURI().startsWith("/api/auth/");
     }
 
+    /**
+     * Returns the client's IP from the TCP connection. {@code X-Forwarded-For} is deliberately
+     * ignored: it can be set to any value by the client, which lets an attacker bypass the
+     * rate limit by sending a different fake IP on every request. If the app is deployed
+     * behind a trusted reverse proxy, configure Spring's {@code ForwardedHeaderFilter} with
+     * a proxy allowlist instead — that rewrites {@code getRemoteAddr()} safely.
+     */
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
         return request.getRemoteAddr();
     }
 }

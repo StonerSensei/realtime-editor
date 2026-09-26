@@ -91,8 +91,7 @@ class RateLimitIntegrationTest extends BaseIntegrationTest {
         login.setPassword("irrelevant-password");
 
         return post("/api/auth/login")
-                // The filter resolves the caller from X-Forwarded-For when present.
-                .header("X-Forwarded-For", ip)
+                .with(req -> { req.setRemoteAddr(ip); return req; })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(login));
     }

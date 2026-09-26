@@ -230,7 +230,7 @@ class CrossInstanceFanoutIntegrationTest {
             broker = new RedisRoomBroker(factory, instanceId);
             tracker = new RoomPresenceTracker(new StringRedisTemplate(factory), instanceId);
             yjs = new YjsRelayWebSocketHandler(jwtService, roomService, objectMapper, broker, tracker);
-            chat = new ChatWebSocketHandler(jwtService, chatService, objectMapper, broker);
+            chat = new ChatWebSocketHandler(jwtService, chatService, roomService, objectMapper, broker);
             yjs.registerWithBroker();
             chat.registerWithBroker();
 
