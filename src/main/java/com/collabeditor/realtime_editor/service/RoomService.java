@@ -66,19 +66,30 @@ public class RoomService {
             return toResponse(room, username, "Joined room successfully");
         }
 
-        // Not yet a member: check they haven't been kicked, then check invitation or code.
-        if (room.getKickedUsers() != null && room.getKickedUsers().contains(username)) {
-            throw new ForbiddenActionException("You have been removed from this room");
-        }
+                // Not yet a member. Kicked users may only come back through a fresh
+        // invitation from the owner; the join code alone is not enough.
+        boolean kicked = room.getKickedUsers() != null && room.getKickedUsers().contains(username);
+        boolean invited = room.getInvitedUsers() != null && room.getInvitedUsers().contains(username);
 
-        boolean invited = room.getInvitedUsers() != null && room.getInvitedUsers().remove(username);
-        if (!invited) {
+        if (kicked) {
+            if (!invited) {
+                throw new ForbiddenActionException(
+                        "You have been removed from this room. Ask the owner to invite you again.");
+            }
+            // Accepting a new invitation lifts the kick.
+            room.getKickedUsers().remove(username);
+        } else if (!invited) {
             if (joinCode == null || joinCode.isBlank()) {
                 throw new ForbiddenActionException("A join code is required to enter this room");
             }
             if (!joinCode.equalsIgnoreCase(room.getJoinCode())) {
                 throw new ForbiddenActionException("Invalid join code");
             }
+        }
+
+        // The invitation is single-use: consume it now that the join is allowed.
+        if (invited) {
+            room.getInvitedUsers().remove(username);
         }
 
         Role role = room.getDefaultRole() != null ? room.getDefaultRole() : Role.EDITOR;
