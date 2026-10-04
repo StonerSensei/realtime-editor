@@ -16,3 +16,6 @@ target/
 
 # OS junk
 .DS_Store
+
+frontend/
+Caddyfile

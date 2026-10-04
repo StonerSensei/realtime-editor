@@ -11,9 +11,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    # Not exposed to the host by default; only the app needs it. Uncomment to inspect.
-    # ports:
-    #   - "27017:27017"
 
   redis:
     image: redis:7-alpine
@@ -25,9 +22,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Not exposed to the host by default; only the app needs it. Uncomment to inspect.
-    # ports:
-    #   - "6379:6379"
 
   app:
     build: .
@@ -39,26 +33,47 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
-      # Point at the mongo service on the compose network
       MONGODB_URI: mongodb://mongo:27017/editor
-      # Point at the redis service on the compose network
       REDIS_HOST: redis
-      # Override in .env for anything non-local (must be >= 32 chars)
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-min-32-characters-long}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-1800000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
-      # Code execution: this path must be identical inside the container and on the
-      # host, because the host Docker daemon resolves the sandbox bind-mount path.
       EXEC_WORK_DIR: /tmp/collabide-exec
     volumes:
-      # Docker-out-of-Docker: let the app drive the host daemon to run code sandboxes
       - /var/run/docker.sock:/var/run/docker.sock
-      # Shared work dir at the SAME absolute path on host and container so that
-      # "docker run -v /tmp/collabide-exec/<id>:/code" resolves correctly on the host
       - /tmp/collabide-exec:/tmp/collabide-exec
+
+  frontend:
+    build: ./frontend
+    image: collabide-frontend:latest
+    container_name: collabide-frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: collabide-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   mongo-data:
+  caddy-data:
+  caddy-config:

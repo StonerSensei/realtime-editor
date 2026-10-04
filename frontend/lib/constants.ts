@@ -17,12 +17,14 @@ function resolveApiUrl(): string {
 
 /** Base URL for WebSocket connections (browser only). Derived from NEXT_PUBLIC_API_URL. */
 export function getWsBaseUrl(): string {
-  const env = process.env.NEXT_PUBLIC_API_URL
-  if (env && env.trim()) return env.trim().replace(/^http/, 'ws')
-  // Fallback: always hit the Spring Boot port directly
+  // Dev: set in .env.local (http://localhost:8080 → ws://localhost:8080)
+  const env = process.env.NEXT_PUBLIC_API_URL?.trim()
+  if (env) return env.replace(/^http/, 'ws')
+
+  // Production: same domain as the page, behind Caddy.
   if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    return `ws://${host}:8080`
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${proto}://${window.location.host}`
   }
   return 'ws://localhost:8080'
 }
