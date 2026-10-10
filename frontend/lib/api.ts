@@ -1,5 +1,7 @@
 import { Auth } from './auth'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.trim() ?? ''
+
 async function request<T = unknown>(
   method: string,
   url: string,
@@ -9,7 +11,7 @@ async function request<T = unknown>(
   const opts: RequestInit = { method, headers: Auth.headers() }
   if (body !== undefined) opts.body = JSON.stringify(body)
 
-  const res = await fetch(url, opts)
+  const res = await fetch(API_BASE + url, opts)
 
   if (res.status === 401 && !_retried) {
     const refreshed = await Auth.refreshAccessToken()

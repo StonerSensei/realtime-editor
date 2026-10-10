@@ -3,6 +3,8 @@
  * All localStorage access is guarded so this module is safe to import in SSR context.
  */
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.trim() ?? ''
+
 function store(key: string, value: string) {
   if (typeof window !== 'undefined') localStorage.setItem(key, value)
 }
@@ -45,7 +47,7 @@ export const Auth = {
     if (!refreshToken) return false
 
     if (!this._refreshing) {
-      this._refreshing = fetch('/api/auth/refresh', {
+      this._refreshing = fetch(API_BASE + '/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -77,7 +79,7 @@ export const Auth = {
     const refreshToken = this.getRefreshToken()
     if (refreshToken) {
       try {
-        await fetch('/api/auth/logout', {
+        await fetch(API_BASE + '/api/auth/logout', {
           method: 'POST',
           headers: this.headers(),
           body: JSON.stringify({ refreshToken }),

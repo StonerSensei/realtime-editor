@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { Auth } from '@/lib/auth'
 import { toast } from '@/components/ui/Toast'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.trim() ?? ''
+
 type Tab = 'login' | 'register'
 
 export default function LoginPage() {
@@ -29,7 +31,7 @@ export default function LoginPage() {
   async function handleLogin(e: FormEvent) {
     e.preventDefault(); setLoginErr(''); setLoading(true)
     try {
-      const res  = await fetch('/api/auth/login', {
+      const res = await fetch(API_BASE + '/api/auth/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loginUser, password: loginPass }),
       })
@@ -44,7 +46,7 @@ export default function LoginPage() {
   async function handleRegister(e: FormEvent) {
     e.preventDefault(); setRegErr(''); setLoading(true)
     try {
-      const res  = await fetch('/api/auth/register', {
+      const res = await fetch(API_BASE + '/api/auth/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUser, email: regEmail, password: regPass }),
       })
