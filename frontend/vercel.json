@@ -1,0 +1,5 @@
+{
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://collabide-api-ryjj.onrender.com"
+  }
+}
