@@ -2,7 +2,7 @@ package com.collabeditor.realtime_editor.websocket;
 
 import com.collabeditor.realtime_editor.dto.request.CodeExecutionRequest;
 import com.collabeditor.realtime_editor.dto.response.CodeExecutionResponse;
-import com.collabeditor.realtime_editor.service.CodeExecutionService;
+import com.collabeditor.realtime_editor.service.CodeExecutor;
 import com.collabeditor.realtime_editor.service.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.net.URI;
 @RequiredArgsConstructor
 public class CodeExecutionWebSocketHandler extends TextWebSocketHandler {
 
-    private final CodeExecutionService codeExecutionService;
+    private final CodeExecutor codeExecutor;
     private final JwtService jwtService;
     private final ObjectMapper objectMapper;
 
@@ -47,7 +47,7 @@ public class CodeExecutionWebSocketHandler extends TextWebSocketHandler {
             CodeExecutionRequest request = objectMapper.readValue(message.getPayload(), CodeExecutionRequest.class);
             log.info("Code execution via WebSocket for language: {}", request.getLanguage());
 
-            CodeExecutionResponse response = codeExecutionService.executeCode(request);
+            CodeExecutionResponse response = codeExecutor.execute(request);
 
             // Send stdout
             if (response.getStdout() != null && !response.getStdout().isEmpty()) {

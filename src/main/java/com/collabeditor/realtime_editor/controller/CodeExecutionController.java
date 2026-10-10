@@ -2,7 +2,8 @@ package com.collabeditor.realtime_editor.controller;
 
 import com.collabeditor.realtime_editor.dto.request.CodeExecutionRequest;
 import com.collabeditor.realtime_editor.dto.response.CodeExecutionResponse;
-import com.collabeditor.realtime_editor.service.CodeExecutionService;
+import com.collabeditor.realtime_editor.service.CodeExecutor;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,12 +16,12 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class CodeExecutionController {
 
-    private final CodeExecutionService codeExecutionService;
+    private final CodeExecutor codeExecutor;
 
     @PostMapping("/execute")
     public ResponseEntity<CodeExecutionResponse> executeCode(@Valid @RequestBody CodeExecutionRequest request) {
         log.info("Code execution request for language: {}", request.getLanguage());
-        CodeExecutionResponse response = codeExecutionService.executeCode(request);
+        CodeExecutionResponse response = codeExecutor.execute(request);
         return ResponseEntity.ok(response);
     }
 }

@@ -5,6 +5,7 @@ import com.collabeditor.realtime_editor.dto.response.CodeExecutionResponse;
 import com.collabeditor.realtime_editor.exception.CodeExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -32,8 +33,9 @@ import java.util.concurrent.TimeUnit;
  * This removes any dependency on external code-execution APIs.
  */
 @Slf4j
+@ConditionalOnProperty(name = "execution.mode", havingValue = "docker", matchIfMissing = true)
 @Service
-public class CodeExecutionService {
+public class DockerCodeExecutor implements CodeExecutor {
 
     private final int timeoutSeconds;
     private final String memoryLimit;
@@ -41,7 +43,7 @@ public class CodeExecutionService {
     private final int maxOutputChars;
     private final Path workDirBase;
 
-    public CodeExecutionService(
+    public DockerCodeExecutor(
             @Value("${execution.timeout-seconds:15}") int timeoutSeconds,
             @Value("${execution.memory-limit:256m}") String memoryLimit,
             @Value("${execution.cpu-limit:0.5}") String cpuLimit,
@@ -84,7 +86,8 @@ public class CodeExecutionService {
         };
     }
 
-    public CodeExecutionResponse executeCode(CodeExecutionRequest request) {
+    @Override
+    public CodeExecutionResponse execute(CodeExecutionRequest request) {
         String language = request.getLanguage();
         log.info("Executing {} code in ephemeral container", language);
 

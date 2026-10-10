@@ -34,3 +34,4 @@ build/
 
 ### Local environment / secrets ###
 .env
+worker/
